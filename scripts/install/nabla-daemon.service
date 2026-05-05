@@ -1,0 +1,32 @@
+# Nabla-agent daemon — systemd user unit (D-12, D-13).
+# Type=simple matches D-12 (foreground daemon; no fork/self-detach).
+# Restart=on-failure does NOT restart on clean exit (preserves the
+# `nabla daemon stop` UX shipped in Phase 6).
+# KillSignal=SIGTERM + TimeoutStopSec=10s match docker stop's grace
+# window. The daemon's own shutdown.ts hard-caps at 9.5s (D-14).
+# After=docker.service / Wants=docker.service order the unit AFTER
+# docker.sock has correct perms — addresses Phase-1 review MEDIUM
+# concern about lazy DockerRuntime construction on macOS/non-systemd.
+
+[Unit]
+Description=Nabla-agent daemon
+Documentation=https://github.com/nabla-agent/nabla-agent
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/nabla-daemon
+Restart=on-failure
+RestartSec=2s
+KillSignal=SIGTERM
+TimeoutStopSec=10s
+EnvironmentFile=-%h/.config/nabla/daemon.env
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nabla-daemon
+StateDirectory=nabla-agent
+Environment="NABLA_STATE_DIR=%S/nabla-agent"
+
+[Install]
+WantedBy=default.target
