@@ -12,12 +12,17 @@
     "./protocol/event": "./src/protocol/event.ts",
     "./protocol/summary": "./src/protocol/summary.ts",
     "./protocol/blocker": "./src/protocol/blocker.ts",
-    "./version": "./src/version.ts"
+    "./version": "./src/version.ts",
+    "./runtime/mount": "./src/runtime/mount.ts",
+    "./runtime/container-spec": "./src/runtime/container-spec.ts",
+    "./runtime/worker-spawn-spec": "./src/runtime/worker-spawn-spec.ts",
+    "./runtime/jsonrpc-stdio": "./src/runtime/jsonrpc-stdio.ts"
   },
   "scripts": {
     "build": "tsc -b"
   },
   "dependencies": {
+    "json-rpc-2.0": "1.7.1",
     "zod": "4.4.3"
   }
 }
