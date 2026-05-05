@@ -1,2 +1,3 @@
-// Phase 0: skeleton only. Real implementation lands in Phase 3.
-export const PHASE_0_WORKER_SKELETON = true as const;
+// Phase 1: re-exports stub-main as the package's public surface. Phase 3
+// replaces with the real loop module.
+export { main } from "./stub-main";
