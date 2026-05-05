@@ -1,0 +1,6 @@
+{
+  "$schema": "https://nabla-agent/schemas/egress-allowlist-v1.json",
+  "version": 1,
+  "_comment": "Phase 1 (D-06): empty. Phase 4 routing populates with provider hosts (direct) or host.docker.internal:<daemon-port> (daemon-proxy mode). Audit: any drift between this file and in-effect iptables rules fails CI (Phase 4 implements the cross-check; Phase 1 only asserts shape).",
+  "allow": []
+}

@@ -18,24 +18,7 @@ const adrFiles = (): string[] =>
     .filter((f) => /^000[1-9]-.+\.md$/.test(f))
     .sort();
 
-const extractVerificationItems = (body: string): string[] => {
-  const lines = body.split("\n");
-  let inVerification = false;
-  const items: string[] = [];
-  for (const line of lines) {
-    if (/^##\s+Verification\s*$/.test(line)) {
-      inVerification = true;
-      continue;
-    }
-    if (inVerification && /^##\s+/.test(line)) {
-      break;
-    }
-    if (inVerification && /^\s*[-*]\s+\S/.test(line)) {
-      items.push(line);
-    }
-  }
-  return items;
-};
+import { extractVerificationItems } from "./adr-verification";
 
 describe("Phase 0 SC#5 — ADRs present and verifiable", () => {
   test("exactly three ADR files exist", () => {
