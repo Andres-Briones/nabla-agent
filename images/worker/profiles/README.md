@@ -44,6 +44,45 @@ This carve-out is documented in:
 - CONTEXT.md D-26 (license-CI gate extension)
 - `images/worker/.licenses/allowed-image.json` (the allow-list itself)
 
+## apt-pin Bump Procedure
+
+Pinned Debian package versions in `packages.list` go stale on apt-archive
+churn — Debian point-releases periodically advance security-fixed packages,
+after which the old version becomes unavailable from the apt index.
+`docker build` then dies with `apt-get install bash=5.2.15-2+b8: not found`.
+
+When CI fails with such an error, follow this runbook:
+
+```bash
+# 1) pull a fresh debian:bookworm-slim
+docker pull debian:bookworm-slim
+
+# 2) for each package in packages.list, ask apt-cache what the
+#    current version is. Run from nabla-agent/:
+docker run --rm -i debian:bookworm-slim bash -lc '
+  apt-get update -qq
+  while read line; do
+    pkg="${line%%=*}"
+    [ -z "$pkg" ] && continue
+    echo "$pkg: $(apt-cache policy "$pkg" 2>/dev/null | awk "/Candidate:/ {print \$2}")"
+  done
+' < images/worker/profiles/minimal/packages.list
+
+# 3) update both packages.list AND apt-licenses.json in the SAME commit
+#    — the audit cross-checks them and fails if versions drift apart.
+
+# 4) verify locally:
+bun run scripts/audit-image-licenses.ts
+bash scripts/build-test-image.sh
+
+# 5) commit with a message naming the bumped packages, e.g.:
+#    chore(image): bump bash 5.2.15-2+b8 -> 5.2.15-2+deb12u1 (apt-archive churn)
+```
+
+The Debian-snapshot-archive solution (deferred to v1.x per CONTEXT D-25)
+would eliminate this manual step. Until then, this runbook is the
+contracted recovery path.
+
 ## Inspiration (Not Dependency)
 
 The profile catalog structure is inspired by claudebox's profile system (D-22). Nabla-agent does not invoke `claudebox` at build time; the catalog is fully inline and license-pure.

@@ -55,3 +55,20 @@ jobs:
 
       - name: Image-license audit (D-26)
         run: bun run scripts/audit-image-licenses.ts
+
+      - name: Build fixture image (nabla-worker:test-minimal)
+        # Closes 01-REVIEWS.md HIGH-2: plans 01-01 / 01-04 NABLA_TEST_DOCKER
+        # paths reference this tag. Build it BEFORE any gated test step.
+        # Linux runners only — Docker is preinstalled on ubuntu-latest.
+        if: runner.os == 'Linux'
+        run: bash scripts/build-test-image.sh
+
+      - name: Conformance + flag-audit (Docker leg, Linux runners only)
+        # Plans 01-01 and 01-04 ship gated tests that require the fixture
+        # image built above. Skipped on macOS Docker Desktop runners
+        # (iptables introspection differences — see 01-RESEARCH.md line
+        # 823 for the matrix limitation).
+        if: runner.os == 'Linux'
+        env:
+          NABLA_TEST_DOCKER: "1"
+        run: bun test packages/daemon/src/runtime/
