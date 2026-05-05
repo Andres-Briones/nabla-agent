@@ -1,6 +1,5 @@
-// RED stub -- typed scaffold so lefthook's `tsc -b` gate passes while the
-// runtime tests genuinely fail. Real implementation lands in the GREEN
-// commit (GET / -> { status, version }).
+// GET /health -- liveness probe. Lives behind the bearer-auth gate (mounted
+// in index.ts), so a 200 here proves the auth gate accepted the bearer.
 import { Hono } from "hono";
 
-export const healthRoute: Hono = new Hono();
+export const healthRoute = new Hono().get("/", (c) => c.json({ status: "ok", version: "0.0.0" }));
