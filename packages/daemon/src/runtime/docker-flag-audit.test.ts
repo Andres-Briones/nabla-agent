@@ -9,10 +9,9 @@
 // runners only (macOS Docker Desktop iptables introspection is non-trivial).
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-
 import type { ContainerHandle } from "@nabla/shared";
 import Docker from "dockerode";
-import { extractVerificationItems } from "./adr-verification";
+import { extractVerificationItems } from "../../../../scripts/adr-verification";
 import { DockerRuntime } from "./docker";
 
 const ADR = "docs/decisions/0001-container-threat-model.md";
@@ -28,9 +27,6 @@ guard("ADR-0001 mechanical audit (CONT-03 / WORK-04)", () => {
   beforeAll(async () => {
     runtime = new DockerRuntime();
     docker = new Docker();
-    // Fixture image must be built locally before this test runs. Plan 07
-    // wires `docker build -f images/worker/profiles/minimal/Dockerfile .`
-    // into the CI gate; locally, run that command before `bun test`.
     handle = await runtime.create({
       image: "nabla-worker:test-minimal",
       env: {},
@@ -52,10 +48,10 @@ guard("ADR-0001 mechanical audit (CONT-03 / WORK-04)", () => {
     if (handle) {
       try {
         await runtime.stop(handle, { timeout: 1 });
-      } catch (_e) {}
+      } catch {}
       try {
         await runtime.destroy(handle);
-      } catch (_e) {}
+      } catch {}
     }
   });
 
@@ -87,8 +83,8 @@ guard("ADR-0001 mechanical audit (CONT-03 / WORK-04)", () => {
     expect(inspect.HostConfig.Privileged).toBe(false);
 
     // Prop 7: egress allow-list -- NetworkMode is custom bridge AND Internal=true
-    expect(inspect.HostConfig.NetworkMode).toMatch(/^nabla-net-/);
     const networkMode = inspect.HostConfig.NetworkMode ?? "";
+    expect(networkMode).toMatch(/^nabla-net-/);
     const net = await docker.getNetwork(networkMode).inspect();
     expect(net.Internal).toBe(true);
 
