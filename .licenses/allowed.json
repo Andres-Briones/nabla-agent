@@ -1,0 +1,63 @@
+{
+  "_comment": "OSI-approved SPDX identifiers (CLAUDE.md constitutional constraint). Hand-curated permissive list. GPL family deliberately excluded -- adding it requires an ADR (mirrors PM2/AGPL-3.0 rejection in CLAUDE.md). FSL, BSL, Anthropic Commercial Terms, and other source-available licenses are constitutionally rejected.",
+  "licenses": [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSD-4-Clause",
+    "ISC",
+    "0BSD",
+    "CC0-1.0",
+    "Unlicense",
+    "Python-2.0",
+    "Zlib"
+  ],
+  "_excluded_explicitly": {
+    "_comment": "OSI-approved but excluded for project policy reasons. Override requires an ADR.",
+    "GPL-2.0": "viral copyleft; excluded by default (mirrors CLAUDE.md PM2/AGPL precedent)",
+    "GPL-3.0": "same",
+    "AGPL-3.0": "same",
+    "LGPL-3.0": "same"
+  },
+  "_rejected": {
+    "_comment": "NOT OSI-approved. Constitutional rejection.",
+    "FSL-1.1-MIT": "Functional Source License; source-available, NOT OSI",
+    "BSL-1.1": "Business Source License; source-available, NOT OSI",
+    "Anthropic-Commercial-Terms": "@anthropic-ai/claude-agent-sdk; rejected per D-05"
+  },
+  "_exceptions_comment": "Per-package overrides for transitive dependencies of dev tooling. Each entry pins an exact name@version and a license string -- if either changes (e.g. transitive bumps to a different license), the audit will fail loudly. BlueOak-1.0.0 is OSI-approved (https://opensource.org/license/blue-oak-model-license, approved 2019) but is intentionally kept off the main allow-list to require explicit acknowledgement. CC-BY-3.0 is NOT OSI-approved; the two SPDX-data packages here use it for their data files (not code), and they reach the tree only as transitive deps of license-checker-rseidelsohn, our own license-CI tool. Reviewed and accepted as an unavoidable bootstrap dependency.",
+  "exceptions": [
+    {
+      "pkg": "minipass@7.1.3",
+      "license": "BlueOak-1.0.0",
+      "reason": "Transitive dep of license-checker-rseidelsohn. BlueOak-1.0.0 is OSI-approved (2019)."
+    },
+    {
+      "pkg": "jackspeak@3.4.3",
+      "license": "BlueOak-1.0.0",
+      "reason": "Transitive dep of license-checker-rseidelsohn. BlueOak-1.0.0 is OSI-approved (2019)."
+    },
+    {
+      "pkg": "path-scurry@1.11.1",
+      "license": "BlueOak-1.0.0",
+      "reason": "Transitive dep of license-checker-rseidelsohn. BlueOak-1.0.0 is OSI-approved (2019)."
+    },
+    {
+      "pkg": "package-json-from-dist@1.0.1",
+      "license": "BlueOak-1.0.0",
+      "reason": "Transitive dep of license-checker-rseidelsohn. BlueOak-1.0.0 is OSI-approved (2019)."
+    },
+    {
+      "pkg": "spdx-exceptions@2.5.0",
+      "license": "CC-BY-3.0",
+      "reason": "Transitive dep of license-checker-rseidelsohn (the license-CI tool itself). CC-BY-3.0 is a Creative Commons attribution license used here for SPDX exception data, not code. Bootstrap exception."
+    },
+    {
+      "pkg": "spdx-ranges@2.1.1",
+      "license": "(MIT AND CC-BY-3.0)",
+      "reason": "Transitive dep of license-checker-rseidelsohn (the license-CI tool itself). Dual-licensed; CC-BY-3.0 portion covers SPDX data files. Bootstrap exception."
+    }
+  ]
+}
