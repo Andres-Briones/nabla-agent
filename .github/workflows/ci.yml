@@ -52,3 +52,6 @@ jobs:
 
       - name: License audit (belt-and-braces -- catches missing/non-SPDX)
         run: bun run scripts/license-audit.ts
+
+      - name: Image-license audit (D-26)
+        run: bun run scripts/audit-image-licenses.ts
