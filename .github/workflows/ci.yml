@@ -1,0 +1,54 @@
+# Phase 0 CI: license purity gate (D-07) + lint + typecheck + build + test.
+# Triggers on every push to any branch and every pull_request (CONTEXT.md
+# "every commit"). Two-stage license walk: production deps, then including dev.
+name: CI
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      - name: Assert hoisted linker (no .bun directory under node_modules)
+        run: |
+          if [ -d "node_modules/.bun" ]; then
+            echo "ERROR: node_modules/.bun exists -- isolated linker is active." >&2
+            echo "Set linker = \"hoisted\" in bunfig.toml." >&2
+            exit 1
+          fi
+
+      - name: Lint + format check (Biome)
+        run: bunx biome check .
+
+      - name: Typecheck (tsc -b)
+        run: bun run typecheck
+
+      - name: Build all packages
+        run: bun run build
+
+      - name: Test (bun:test)
+        run: bun test
+
+      - name: License gate (production deps)
+        run: |
+          ALLOWED=$(jq -r '.licenses | join(";")' .licenses/allowed.json)
+          bunx license-checker-rseidelsohn --production --onlyAllow "$ALLOWED" --excludePrivatePackages
+
+      - name: License gate (including dev deps)
+        run: |
+          ALLOWED=$(jq -r '.licenses | join(";")' .licenses/allowed.json)
+          bunx license-checker-rseidelsohn --onlyAllow "$ALLOWED" --excludePrivatePackages
+
+      - name: License audit (belt-and-braces -- catches missing/non-SPDX)
+        run: bun run scripts/license-audit.ts
