@@ -12,6 +12,7 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { isAllowed } from "./spdx";
 
 interface Exception {
   pkg: string;
@@ -58,29 +59,6 @@ const normalizeLicense = (pkg: PackageJson): { value: string | null; raw: unknow
     }
   }
   return { value: null, raw: undefined };
-};
-
-const isAllowed = (license: string): boolean => {
-  // Reject SEE LICENSE IN ... (unclassifiable from package.json alone)
-  if (/^SEE LICENSE/i.test(license)) return false;
-  // Accept simple identifier
-  if (allowedSet.has(license)) return true;
-  // Accept SPDX expressions of shape "(A OR B)" if EVERY clause is allowed
-  // (conservative; reject if any side fails or expression uses AND -- AND
-  // means the package is licensed under BOTH and we must allow both).
-  const stripped = license.replace(/[()]/g, "").trim();
-  if (/\bAND\b/i.test(stripped)) {
-    const parts = stripped.split(/\s+AND\s+/i).map((s) => s.trim());
-    return parts.every((p) => allowedSet.has(p));
-  }
-  if (/\bOR\b/i.test(stripped)) {
-    const parts = stripped.split(/\s+OR\s+/i).map((s) => s.trim());
-    return parts.some((p) => allowedSet.has(p));
-  }
-  // Accept "Apache-2.0 WITH LLVM-exception" style if base is allowed
-  const withMatch = stripped.match(/^(\S+)\s+WITH\s+\S+$/i);
-  if (withMatch?.[1] && allowedSet.has(withMatch[1])) return true;
-  return false;
 };
 
 const walk = (dir: string): void => {
@@ -131,7 +109,7 @@ const walk = (dir: string): void => {
             pkg: id,
             reason: `no license field (raw: ${JSON.stringify(raw)})`,
           });
-        } else if (!isAllowed(value)) {
+        } else if (!isAllowed(value, allowedSet)) {
           violations.push({
             pkg: id,
             reason: `license '${value}' not in allow-list`,

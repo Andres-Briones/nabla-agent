@@ -1,0 +1,38 @@
+{
+  "_comment": "Image-content SPDX allow-list (D-26). Distinct from .licenses/allowed.json (which governs npm transitives). Apt-installed packages are invoked as separate processes inside the worker container -- no linking, no derivative work on the worker binary -- so the GPL family is permitted here even though it remains excluded npm-side (CLAUDE.md PM2/AGPL precedent). Reference: RESEARCH.md A1 + CONTEXT D-26.",
+  "licenses": [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSD-4-Clause",
+    "ISC",
+    "0BSD",
+    "CC0-1.0",
+    "Unlicense",
+    "Python-2.0",
+    "Zlib",
+    "GPL-2.0",
+    "GPL-2.0+",
+    "GPL-3.0",
+    "GPL-3.0+",
+    "LGPL-2.0",
+    "LGPL-2.1",
+    "LGPL-2.1+",
+    "LGPL-3.0",
+    "MPL-2.0",
+    "curl"
+  ],
+  "_rejected": {
+    "_comment": "NOT OSI-approved. Constitutional rejection. Mirrors .licenses/allowed.json _rejected.",
+    "FSL-1.1-MIT": "Functional Source License; source-available, NOT OSI",
+    "BSL-1.1": "Business Source License; source-available, NOT OSI",
+    "Anthropic-Commercial-Terms": "rejected per ADR-0003"
+  },
+  "_notes": [
+    "Adding a new identifier requires explanation in the PR description.",
+    "Removing an identifier in active use (referenced by an apt-licenses.json entry) breaks the audit -- intentional.",
+    "The `curl` SPDX id is the curl project's custom permissive license."
+  ]
+}
