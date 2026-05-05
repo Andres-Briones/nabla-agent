@@ -1,0 +1,16 @@
+{
+  "name": "@nabla/daemon",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@nabla/shared": "workspace:*",
+    "hono": "4.12.16",
+    "zod": "4.4.3"
+  }
+}

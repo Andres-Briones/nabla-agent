@@ -1,0 +1,19 @@
+{
+  "name": "@nabla/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auth/token": "./src/auth/token.ts",
+    "./protocol/error": "./src/protocol/error.ts",
+    "./protocol/plan": "./src/protocol/plan.ts",
+    "./protocol/rpc": "./src/protocol/rpc.ts",
+    "./protocol/event": "./src/protocol/event.ts",
+    "./protocol/summary": "./src/protocol/summary.ts",
+    "./protocol/blocker": "./src/protocol/blocker.ts",
+    "./version": "./src/version.ts"
+  },
+  "scripts": { "build": "tsc -b" },
+  "dependencies": { "zod": "4.4.3" }
+}

@@ -1,0 +1,6 @@
+[install]
+linker = "hoisted"
+exact = true
+
+[install.lockfile]
+print = "yarn"
