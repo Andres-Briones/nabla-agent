@@ -1,0 +1,48 @@
+# docker build context exclusions for nabla-agent.
+# The build context root is `nabla-agent/` (the inner repo) so the
+# Dockerfile at images/worker/profiles/minimal/Dockerfile can resolve
+# `COPY package.json bun.lock ./` and `COPY packages/...`.
+# Without this file, `docker build .` slurps the entire workspace into
+# the build context — including 100+MB of node_modules and CI history.
+
+# Build artifacts (never wanted in the runtime image)
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local bun cache
+.bun/
+
+# VCS metadata (the runtime image has no business knowing about commits)
+.git/
+.gitignore
+.gitattributes
+
+# Editor / OS junk
+.DS_Store
+*.swp
+*.swo
+
+# Log files
+*.log
+
+# GSD planning artifacts (live outside the inner repo, but defense-in-depth)
+.planning/
+
+# Compiled scripts/* output (gitignored already; mirror it here)
+scripts/*.d.ts
+scripts/*.d.ts.map
+scripts/*.js
+scripts/*.js.map
+
+# Test images and fixtures
+*.tar
+*.tgz
+
+# Don't ship the tooling configs (TS / biome / lefthook) into the image
+biome.json
+lefthook.yml
+tsconfig*.json
+bunfig.toml
+.editorconfig
