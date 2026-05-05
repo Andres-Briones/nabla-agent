@@ -5,3 +5,6 @@ dist/
 .bun/
 coverage/
 *.tsbuildinfo
+
+# Core dumps from daemon test spawns
+core.*
