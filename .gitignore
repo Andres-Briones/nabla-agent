@@ -8,3 +8,9 @@ coverage/
 
 # Core dumps from daemon test spawns
 core.*
+
+# Compiled script output (bun run scripts/...)
+scripts/*.d.ts
+scripts/*.d.ts.map
+scripts/*.js
+scripts/*.js.map
