@@ -2,8 +2,6 @@
 // Phase 0 D-08 shared types boundary. Test-only: NEVER imported from
 // production code paths (gated by file basename `.fake.` is too magical;
 // keep import-site discipline instead).
-
-import { PassThrough } from "node:stream";
 import type { ContainerHandle, ContainerSpec, ExecHandle } from "@nabla/shared";
 import type { IContainerRuntime } from "./interface";
 
@@ -44,31 +42,36 @@ export class FakeRuntime implements IContainerRuntime {
     }
     c.state = "executed";
 
-    const stdin = new PassThrough();
-    const stdout = new PassThrough();
-    const stderr = new PassThrough();
+    const waitPromise = Promise.resolve({ exitCode: 0 });
 
-    const wait = async (): Promise<{ exitCode: number }> => {
-      return new Promise((resolve) => {
-        stdin.on("finish", () => {
-          resolve({ exitCode: 0 });
-        });
-      });
+    return {
+      stdin: {
+        end: (data?: string) => {
+          // Simulate writing data and resolving immediately
+          if (data) {
+            // Echo a fake summary to stdout would happen here
+          }
+        },
+      } as unknown as NodeJS.WritableStream,
+      stdout: {
+        on: (_event: string, _handler: Function) => {},
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from(
+            JSON.stringify({
+              status: "ok",
+              filesChanged: [],
+              decisions: [],
+              blockers: [],
+              summary: "fake-runtime echo",
+            }) + "\n",
+          );
+        },
+      } as unknown as NodeJS.ReadableStream,
+      stderr: {
+        on: (_event: string, _handler: Function) => {},
+      } as unknown as NodeJS.ReadableStream,
+      wait: async () => waitPromise,
     };
-
-    // Echo a fake summary on stdout when stdin receives data
-    stdin.on("data", (_data: Buffer) => {
-      const summary = JSON.stringify({
-        status: "ok",
-        filesChanged: [],
-        decisions: [],
-        blockers: [],
-        summary: "fake-runtime echo",
-      });
-      stdout.write(summary + "\n");
-    });
-
-    return { stdin, stdout, stderr, wait };
   }
 
   async stop(h: ContainerHandle, _opts?: { timeout?: number }): Promise<void> {
@@ -78,8 +81,10 @@ export class FakeRuntime implements IContainerRuntime {
   }
 
   async destroy(h: ContainerHandle): Promise<void> {
-    const c = this.getContainer(h);
-    this.containers.delete(c.id);
+    // Idempotent: don't throw if already destroyed
+    if (this.containers.has(h.id)) {
+      this.containers.delete(h.id);
+    }
   }
 
   private getContainer(h: ContainerHandle): FakeContainer {
