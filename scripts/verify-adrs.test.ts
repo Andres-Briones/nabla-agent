@@ -10,6 +10,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { extractVerificationItems } from "@nabla/shared/runtime/adr-verification";
+
 const DECISIONS_DIR = "docs/decisions";
 const expectedKeywords = ["container-threat-model", "meridian-risk", "v1-to-v2-invariants"];
 
@@ -17,8 +19,6 @@ const adrFiles = (): string[] =>
   readdirSync(DECISIONS_DIR)
     .filter((f) => /^000[1-9]-.+\.md$/.test(f))
     .sort();
-
-import { extractVerificationItems } from "./adr-verification";
 
 describe("Phase 0 SC#5 — ADRs present and verifiable", () => {
   test("exactly three ADR files exist", () => {

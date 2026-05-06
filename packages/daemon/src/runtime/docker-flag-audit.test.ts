@@ -1,7 +1,7 @@
 // CONT-03 mechanical audit: read ADR-0001 ## Verification list and assert
 // every proposition holds against a live `docker inspect` of a freshly
 // spawned worker container. Reuses the Phase-0 extractor
-// (scripts/adr-verification.ts) so the parser has one source of truth
+// (@nabla/shared/runtime/adr-verification) so the parser has one source of truth
 // (PATTERNS.md S6).
 //
 // Gated on NABLA_TEST_DOCKER=1 because CI may not have a Docker socket.
@@ -10,8 +10,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { ContainerHandle } from "@nabla/shared";
+import { extractVerificationItems } from "@nabla/shared/runtime/adr-verification";
 import Docker from "dockerode";
-import { extractVerificationItems } from "../../../../scripts/adr-verification";
 import { DockerRuntime } from "./docker";
 
 const ADR = "docs/decisions/0001-container-threat-model.md";
