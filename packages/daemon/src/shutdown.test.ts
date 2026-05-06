@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+// Phase 1 plan 09 — DAEMON-01 graceful shutdown tests.
+// Closes 01-REVIEWS.md HIGH-4: tests no longer mutate the real
+// process's signal handlers and no longer wait 9.5s of real wall
+// time. They inject an isolated EventEmitter as `signalSource` and
+// a small `hardCapMs` (250ms) for the never-resolving case.
+//
+// The production code path (process + DEFAULT_HARD_CAP_MS) is wired
+// by packages/daemon/src/index.ts and exercised by index.test.ts.
+import { describe, expect, test } from "bun:test";
+import { EventEmitter } from "node:events";
 
 import type { ContainerHandle } from "@nabla/shared";
 
@@ -30,10 +39,10 @@ const makeRuntime = (stopBehavior: "fast" | "slow-resolve" | "never"): ShutdownT
       stops.push(h.id);
       if (stopBehavior === "fast") return;
       if (stopBehavior === "slow-resolve") {
-        await new Promise((r) => setTimeout(r, 200));
+        await new Promise((r) => setTimeout(r, 50));
         return;
       }
-      // "never": resolves never (the t=9.5s cap fires).
+      // "never": resolves never (the hardCapMs cap fires).
       await new Promise(() => {});
     },
     destroy: async (h: ContainerHandle) => {
@@ -56,24 +65,20 @@ const makeServer = (): { stop: (c: boolean) => void; lastClose: boolean | null }
 
 const handles = (ids: string[]): ContainerHandle[] => ids.map((id) => ({ id, name: `n-${id}` }));
 
-const ORIG_LISTENERS = { term: process.listeners("SIGTERM"), int: process.listeners("SIGINT") };
-
-beforeEach(() => {
-  process.removeAllListeners("SIGTERM");
-  process.removeAllListeners("SIGINT");
-});
-afterEach(() => {
-  process.removeAllListeners("SIGTERM");
-  process.removeAllListeners("SIGINT");
-  for (const l of ORIG_LISTENERS.term) process.on("SIGTERM", l as never);
-  for (const l of ORIG_LISTENERS.int) process.on("SIGINT", l as never);
-});
+const waitFor = async (predicate: () => boolean, maxMs: number, stepMs = 5): Promise<number> => {
+  const start = Date.now();
+  while (!predicate() && Date.now() - start < maxMs) {
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
+  return Date.now() - start;
+};
 
 describe("DAEMON-01 two-stage shutdown (D-14, D-15, D-16)", () => {
-  test("fast workers: shutdownResolver fires within 1s and destroys all", async () => {
+  test("fast workers: shutdownResolver fires <50ms and destroys all", async () => {
     const runtime = makeRuntime("fast");
     const server = makeServer();
     const hs = handles(["a", "b", "c"]);
+    const signalSource = new EventEmitter();
     let resolved = false;
     const ctx: ShutdownContext = {
       server,
@@ -82,23 +87,27 @@ describe("DAEMON-01 two-stage shutdown (D-14, D-15, D-16)", () => {
       shutdownResolver: () => {
         resolved = true;
       },
+      signalSource,
+      hardCapMs: 1_000,
+      workerGraceS: 1,
     };
     installShutdownHandlers(ctx);
-    const start = Date.now();
-    process.emit("SIGTERM" as never);
-    await new Promise((r) => setTimeout(r, 200));
-    const elapsed = Date.now() - start;
+
+    signalSource.emit("SIGTERM", "SIGTERM");
+    const elapsed = await waitFor(() => resolved, 500);
+
     expect(resolved).toBe(true);
-    expect(elapsed).toBeLessThan(1_000);
+    expect(elapsed).toBeLessThan(500);
     expect(runtime.stops.sort()).toEqual(["a", "b", "c"]);
     expect(runtime.destroys.sort()).toEqual(["a", "b", "c"]);
     expect(server.lastClose).toBe(false); // graceful drain (D-14 step 1)
   });
 
-  test("never-resolving stop(): hard cap at 9.5s, force-reap fires", async () => {
+  test("never-resolving stop(): hard cap fires and force-reap runs", async () => {
     const runtime = makeRuntime("never");
     const server = makeServer();
     const hs = handles(["stuck"]);
+    const signalSource = new EventEmitter();
     let resolved = false;
     const ctx: ShutdownContext = {
       server,
@@ -107,35 +116,71 @@ describe("DAEMON-01 two-stage shutdown (D-14, D-15, D-16)", () => {
       shutdownResolver: () => {
         resolved = true;
       },
+      signalSource,
+      hardCapMs: 250, // Tiny cap — production uses 9_500.
+      workerGraceS: 1,
     };
     installShutdownHandlers(ctx);
+
     const start = Date.now();
-    process.emit("SIGTERM" as never);
-    // Wait up to 11s for the resolver to fire after the 9.5s cap.
-    for (let i = 0; i < 220 && !resolved; i++) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    const elapsed = Date.now() - start;
+    signalSource.emit("SIGTERM", "SIGTERM");
+    const elapsed = await waitFor(() => resolved, 1_000);
+    const totalElapsed = Date.now() - start;
+
     expect(resolved).toBe(true);
-    expect(elapsed).toBeGreaterThanOrEqual(9_400);
-    expect(elapsed).toBeLessThan(11_000);
+    // Cap must have fired (>=hardCapMs) but well under the 1s waitFor.
+    expect(elapsed).toBeGreaterThanOrEqual(200);
+    expect(totalElapsed).toBeLessThan(1_000);
     expect(runtime.destroys).toContain("stuck"); // force-reap fired
-  }, 15_000);
+  });
 
   test("re-entrant SIGTERM: stop() called once per handle", async () => {
     const runtime = makeRuntime("slow-resolve");
     const server = makeServer();
     const hs = handles(["a"]);
+    const signalSource = new EventEmitter();
     const ctx: ShutdownContext = {
       server,
       runtime,
       handles: () => hs,
       shutdownResolver: () => {},
+      signalSource,
+      hardCapMs: 1_000,
+      workerGraceS: 1,
     };
     installShutdownHandlers(ctx);
-    process.emit("SIGTERM" as never);
-    process.emit("SIGTERM" as never);
-    await new Promise((r) => setTimeout(r, 400));
+
+    signalSource.emit("SIGTERM", "SIGTERM");
+    signalSource.emit("SIGTERM", "SIGTERM");
+    await new Promise((r) => setTimeout(r, 200));
+
     expect(runtime.stops).toEqual(["a"]);
+  });
+
+  test("SIGINT also triggers shutdown (parity with SIGTERM)", async () => {
+    const runtime = makeRuntime("fast");
+    const server = makeServer();
+    const hs = handles(["x"]);
+    const signalSource = new EventEmitter();
+    let resolved = false;
+    const ctx: ShutdownContext = {
+      server,
+      runtime,
+      handles: () => hs,
+      shutdownResolver: () => {
+        resolved = true;
+      },
+      signalSource,
+      hardCapMs: 1_000,
+      workerGraceS: 1,
+    };
+    installShutdownHandlers(ctx);
+
+    signalSource.emit("SIGINT", "SIGINT");
+    const elapsed = await waitFor(() => resolved, 500);
+
+    expect(resolved).toBe(true);
+    expect(elapsed).toBeLessThan(500);
+    expect(runtime.destroys).toContain("x");
   });
 });
