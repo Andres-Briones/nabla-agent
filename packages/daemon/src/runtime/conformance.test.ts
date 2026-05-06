@@ -115,5 +115,34 @@ for (const { name, factory } of runtimes) {
       // audit (plan 04) verifies the dockerode propagation directly.
       await rt.destroy(h);
     });
+
+    test("wait() and stdout do not resolve before stdin.end() is called", async () => {
+      const rt = await factory();
+      const h = await rt.create({
+        image: "nabla-worker:test-minimal",
+        env: {},
+        labels: { "nabla.run_id": "conf-4", "nabla.worker_id": "w-stdin" },
+        mounts: [],
+        user: "1000:1000",
+        tty: false,
+      });
+      await rt.start(h);
+      const e = await rt.exec(h, ["/usr/local/bin/nabla-worker"]);
+      let waitResolved = false;
+      void e.wait().then(() => {
+        waitResolved = true;
+      });
+      // Without stdin.end(), wait() must still be pending after a short
+      // delay. (DockerRuntime would block on the hijacked stream's
+      // close event; FakeRuntime now mirrors that.)
+      await new Promise((r) => setTimeout(r, 100));
+      expect(waitResolved).toBe(false);
+      // Now close stdin and wait should resolve.
+      e.stdin.end();
+      const { exitCode } = await e.wait();
+      expect(exitCode).toBe(0);
+      await rt.stop(h, { timeout: 1 });
+      await rt.destroy(h);
+    });
   });
 }

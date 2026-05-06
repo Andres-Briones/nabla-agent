@@ -2,6 +2,13 @@
 // Phase 0 D-08 shared types boundary. Test-only: NEVER imported from
 // production code paths (gated by file basename `.fake.` is too magical;
 // keep import-site discipline instead).
+//
+// Phase 1 plan 10 (closes 01-REVIEWS.md HIGH-5): wait() and stdout are
+// gated on stdin.end(). DockerRuntime's stdout only emits after stdin
+// closes (the hijacked stream's TCP-style behaviour); FakeRuntime now
+// mirrors that. A consumer that forgets to end stdin will HANG on
+// readAll(stdout) AND on wait() — same failure mode as DockerRuntime.
+import { PassThrough } from "node:stream";
 import type { ContainerHandle, ContainerSpec, ExecHandle } from "@nabla/shared";
 import type { IContainerRuntime } from "./interface";
 
@@ -42,35 +49,48 @@ export class FakeRuntime implements IContainerRuntime {
     }
     c.state = "executed";
 
-    const waitPromise = Promise.resolve({ exitCode: 0 });
+    // The contract: stdout emits the envelope AFTER stdin closes,
+    // and wait() resolves AFTER stdin closes. This is the same
+    // observable behaviour DockerRuntime exposes (the hijacked
+    // stream only flushes the demux after stdin TCP-half-close).
+    let resolveStdinClosed!: () => void;
+    const stdinClosed = new Promise<void>((r) => {
+      resolveStdinClosed = r;
+    });
+
+    const stdin = new PassThrough();
+    stdin.on("finish", () => resolveStdinClosed());
+    stdin.on("end", () => resolveStdinClosed());
+
+    const envelope =
+      JSON.stringify({
+        status: "ok",
+        filesChanged: [],
+        decisions: [],
+        blockers: [],
+        summary: "fake-runtime echo",
+      }) + "\n";
+
+    // Drive the stdout PassThrough only after stdin closes.
+    const stdout = new PassThrough();
+    void stdinClosed.then(() => {
+      stdout.write(envelope);
+      stdout.end();
+    });
+
+    const stderr = new PassThrough();
+    // Empty stderr; close it on the same cue so consumers iterating
+    // stderr don't hang either.
+    void stdinClosed.then(() => stderr.end());
 
     return {
-      stdin: {
-        end: (data?: string) => {
-          // Simulate writing data and resolving immediately
-          if (data) {
-            // Echo a fake summary to stdout would happen here
-          }
-        },
-      } as unknown as NodeJS.WritableStream,
-      stdout: {
-        on: (_event: string, _handler: Function) => {},
-        async *[Symbol.asyncIterator]() {
-          yield Buffer.from(
-            JSON.stringify({
-              status: "ok",
-              filesChanged: [],
-              decisions: [],
-              blockers: [],
-              summary: "fake-runtime echo",
-            }) + "\n",
-          );
-        },
-      } as unknown as NodeJS.ReadableStream,
-      stderr: {
-        on: (_event: string, _handler: Function) => {},
-      } as unknown as NodeJS.ReadableStream,
-      wait: async () => waitPromise,
+      stdin: stdin as NodeJS.WritableStream,
+      stdout: stdout as NodeJS.ReadableStream,
+      stderr: stderr as NodeJS.ReadableStream,
+      wait: async (): Promise<{ exitCode: number }> => {
+        await stdinClosed;
+        return { exitCode: 0 };
+      },
     };
   }
 
@@ -81,7 +101,7 @@ export class FakeRuntime implements IContainerRuntime {
   }
 
   async destroy(h: ContainerHandle): Promise<void> {
-    // Idempotent: don't throw if already destroyed
+    // Idempotent: don't throw if already destroyed.
     if (this.containers.has(h.id)) {
       this.containers.delete(h.id);
     }
