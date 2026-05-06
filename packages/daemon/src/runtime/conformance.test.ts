@@ -61,12 +61,12 @@ for (const { name, factory } of runtimes) {
       await rt.start(h);
       const e = await rt.exec(h, ["/usr/local/bin/nabla-worker"]);
       e.stdin.end(
-        JSON.stringify({
+        `${JSON.stringify({
           jsonrpc: "2.0",
           id: 1,
           method: "task.run",
           params: { what: "conformance" },
-        }) + "\n",
+        })}\n`,
       );
       const out = await readAll(e.stdout);
       const env = SummarySchema.parse(JSON.parse(out.trim().split("\n").at(-1) ?? "{}"));
