@@ -15,17 +15,28 @@ import { join } from "node:path";
 
 import { isAllowed } from "./spdx";
 
-interface AllowedImage { licenses: string[] }
-interface AptLicensesPackages { [pkg: string]: { version: string; license: string } }
-interface AptLicensesFile { packages: AptLicensesPackages }
+interface AllowedImage {
+  licenses: string[];
+}
+interface AptLicensesPackages {
+  [pkg: string]: { version: string; license: string };
+}
+interface AptLicensesFile {
+  packages: AptLicensesPackages;
+}
 
-const ALLOW_LIST_PATH = process.env["NABLA_AUDIT_ALLOW_LIST"] ?? "images/worker/.licenses/allowed-image.json";
-const PROFILES_DIR    = process.env["NABLA_AUDIT_PROFILES_DIR"] ?? "images/worker/profiles";
+const ALLOW_LIST_PATH =
+  process.env.NABLA_AUDIT_ALLOW_LIST ?? "images/worker/.licenses/allowed-image.json";
+const PROFILES_DIR = process.env.NABLA_AUDIT_PROFILES_DIR ?? "images/worker/profiles";
 
 const allowed = JSON.parse(readFileSync(ALLOW_LIST_PATH, "utf8")) as AllowedImage;
 const allowedSet = new Set(allowed.licenses);
 
-interface Violation { profile: string; pkg: string; reason: string }
+interface Violation {
+  profile: string;
+  pkg: string;
+  reason: string;
+}
 const violations: Violation[] = [];
 
 const parsePackagesList = (raw: string): Map<string, string> => {
@@ -47,12 +58,12 @@ for (const profile of readdirSync(PROFILES_DIR)) {
   const dir = join(PROFILES_DIR, profile);
   if (!statSync(dir).isDirectory()) continue;
   const pkgListPath = join(dir, "packages.list");
-  const aptLicPath  = join(dir, "apt-licenses.json");
+  const aptLicPath = join(dir, "apt-licenses.json");
   let pkgList: Map<string, string>;
   let aptLic: AptLicensesPackages;
   try {
     pkgList = parsePackagesList(readFileSync(pkgListPath, "utf8"));
-    aptLic  = (JSON.parse(readFileSync(aptLicPath, "utf8")) as AptLicensesFile).packages ?? {};
+    aptLic = (JSON.parse(readFileSync(aptLicPath, "utf8")) as AptLicensesFile).packages ?? {};
   } catch (err) {
     violations.push({ profile, pkg: "(profile)", reason: String(err) });
     continue;
@@ -66,16 +77,28 @@ for (const profile of readdirSync(PROFILES_DIR)) {
       continue;
     }
     if (lic.version !== version) {
-      violations.push({ profile, pkg: name, reason: `version mismatch (packages.list=${version} vs apt-licenses.json=${lic.version})` });
+      violations.push({
+        profile,
+        pkg: name,
+        reason: `version mismatch (packages.list=${version} vs apt-licenses.json=${lic.version})`,
+      });
     }
     if (!isAllowed(lic.license, allowedSet)) {
-      violations.push({ profile, pkg: name, reason: `license '${lic.license}' not in allowed-image.json` });
+      violations.push({
+        profile,
+        pkg: name,
+        reason: `license '${lic.license}' not in allowed-image.json`,
+      });
     }
   }
   // Reverse check: every apt-licenses entry has matching packages.list entry.
   for (const name of Object.keys(aptLic)) {
     if (!pkgList.has(name)) {
-      violations.push({ profile, pkg: name, reason: "stale apt-licenses.json entry (no matching packages.list line)" });
+      violations.push({
+        profile,
+        pkg: name,
+        reason: "stale apt-licenses.json entry (no matching packages.list line)",
+      });
     }
   }
 }
