@@ -60,6 +60,9 @@ jobs:
         # Closes 01-REVIEWS.md HIGH-2: plans 01-01 / 01-04 NABLA_TEST_DOCKER
         # paths reference this tag. Build it BEFORE any gated test step.
         # Linux runners only — Docker is preinstalled on ubuntu-latest.
+        # Base-image digests are resolved by the script via
+        # `docker manifest inspect` (jq is preinstalled on ubuntu-latest).
+        # See plan 01-12 for the digest-pinning strategy (D-25).
         if: runner.os == 'Linux'
         run: bash scripts/build-test-image.sh
 
