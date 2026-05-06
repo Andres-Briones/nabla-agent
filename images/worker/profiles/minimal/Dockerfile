@@ -7,11 +7,18 @@
 # /work scratch volume is mounted as tmpfs by the runtime (D-08).
 # Reproducibility (D-25): both FROM lines pinned by sha256 digest;
 # packages.list version-pins every apt entry; --no-install-recommends.
+# Digests are passed via --build-arg BUN_DIGEST / --build-arg DEBIAN_DIGEST
+# and resolved/pinned inside scripts/build-test-image.sh (no floating tags).
 
 ############################################################
 # Stage 1: build the worker binary with Bun
 ############################################################
-FROM oven/bun:1.3.13-debian@sha256:<PINNED_BUN_DIGEST> AS build
+# ARG must precede the FROM that consumes it. Digest is supplied by
+# scripts/build-test-image.sh (or any caller) via `--build-arg BUN_DIGEST=sha256:...`.
+# No default value: missing the arg is a deliberate hard error so we
+# never accidentally build against `latest`.
+ARG BUN_DIGEST
+FROM oven/bun:1.3.13-debian@${BUN_DIGEST} AS build
 WORKDIR /src
 
 COPY package.json bun.lock ./
@@ -27,7 +34,10 @@ RUN bun build packages/worker/src/stub-main.ts \
 ############################################################
 # Stage 2: runtime image (minimal profile)
 ############################################################
-FROM debian:bookworm-slim@sha256:<PINNED_DEBIAN_DIGEST>
+# ARG must precede the FROM that consumes it; the prior Stage-1 ARG
+# is scoped to that stage only, so we re-declare here for Stage 2.
+ARG DEBIAN_DIGEST
+FROM debian:bookworm-slim@${DEBIAN_DIGEST}
 
 # ADR-0001 #1: non-root UID:GID 1000:1000.
 RUN groupadd -g 1000 nabla \
