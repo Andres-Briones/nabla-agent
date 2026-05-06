@@ -16,7 +16,8 @@
     "./runtime/mount": "./src/runtime/mount.ts",
     "./runtime/container-spec": "./src/runtime/container-spec.ts",
     "./runtime/worker-spawn-spec": "./src/runtime/worker-spawn-spec.ts",
-    "./runtime/jsonrpc-stdio": "./src/runtime/jsonrpc-stdio.ts"
+    "./runtime/jsonrpc-stdio": "./src/runtime/jsonrpc-stdio.ts",
+    "./runtime/adr-verification": "./src/runtime/adr-verification.ts"
   },
   "scripts": {
     "build": "tsc -b"

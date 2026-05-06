@@ -15,6 +15,7 @@ export { type Event, EventSchema } from "./protocol/event";
 export { type Plan, PlanSchema } from "./protocol/plan";
 export { type JsonRpcRequest, JsonRpcRequestSchema } from "./protocol/rpc";
 export { type Summary, SummarySchema } from "./protocol/summary";
+export { extractVerificationItems } from "./runtime/adr-verification";
 export {
   type ContainerHandle,
   type ContainerSpec,
