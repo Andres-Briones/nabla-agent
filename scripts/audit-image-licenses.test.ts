@@ -1,8 +1,8 @@
 // D-26 + PATTERNS.md S5: image-license audit tests.
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const runAudit = (profilesDir: string, allowListPath: string) => {
   return spawnSync("bun", ["run", "scripts/audit-image-licenses.ts"], {
@@ -21,7 +21,7 @@ describe("D-26 image-license audit", () => {
   test("passes on the committed minimal profile", () => {
     const result = runAudit(
       join(process.cwd(), "images", "worker", "profiles"),
-      join(process.cwd(), "images", "worker", ".licenses", "allowed-image.json")
+      join(process.cwd(), "images", "worker", ".licenses", "allowed-image.json"),
     );
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Image-license audit OK");
@@ -37,12 +37,15 @@ describe("D-26 image-license audit", () => {
 
       writeFileSync(
         join(workerLicDir, "allowed-image.json"),
-        readFileSync(join(process.cwd(), "images", "worker", ".licenses", "allowed-image.json"), "utf8")
+        readFileSync(
+          join(process.cwd(), "images", "worker", ".licenses", "allowed-image.json"),
+          "utf8",
+        ),
       );
 
       writeFileSync(
         join(profileDir, "packages.list"),
-        "bash=5.2.15-2+b8\ncoreutils=9.1-1\nfake=1.0\n"
+        "bash=5.2.15-2+b8\ncoreutils=9.1-1\nfake=1.0\n",
       );
 
       writeFileSync(
@@ -52,12 +55,12 @@ describe("D-26 image-license audit", () => {
             bash: { version: "5.2.15-2+b8", license: "GPL-3.0+" },
             coreutils: { version: "9.1-1", license: "GPL-3.0+" },
           },
-        })
+        }),
       );
 
       const result = runAudit(
         join(tmpDir, "images", "worker", "profiles"),
-        join(tmpDir, "images", "worker", ".licenses", "allowed-image.json")
+        join(tmpDir, "images", "worker", ".licenses", "allowed-image.json"),
       );
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("missing apt-licenses.json entry");
@@ -76,13 +79,13 @@ describe("D-26 image-license audit", () => {
 
       writeFileSync(
         join(workerLicDir, "allowed-image.json"),
-        readFileSync(join(process.cwd(), "images", "worker", ".licenses", "allowed-image.json"), "utf8")
+        readFileSync(
+          join(process.cwd(), "images", "worker", ".licenses", "allowed-image.json"),
+          "utf8",
+        ),
       );
 
-      writeFileSync(
-        join(profileDir, "packages.list"),
-        "bash=5.2.15-2+b8\n"
-      );
+      writeFileSync(join(profileDir, "packages.list"), "bash=5.2.15-2+b8\n");
 
       writeFileSync(
         join(profileDir, "apt-licenses.json"),
@@ -90,12 +93,12 @@ describe("D-26 image-license audit", () => {
           packages: {
             bash: { version: "5.2.15-2+b8", license: "FSL-1.1-MIT" },
           },
-        })
+        }),
       );
 
       const result = runAudit(
         join(tmpDir, "images", "worker", "profiles"),
-        join(tmpDir, "images", "worker", ".licenses", "allowed-image.json")
+        join(tmpDir, "images", "worker", ".licenses", "allowed-image.json"),
       );
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("not in allowed-image.json");
