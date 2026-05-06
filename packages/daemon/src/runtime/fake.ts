@@ -62,14 +62,13 @@ export class FakeRuntime implements IContainerRuntime {
     stdin.on("finish", () => resolveStdinClosed());
     stdin.on("end", () => resolveStdinClosed());
 
-    const envelope =
-      JSON.stringify({
-        status: "ok",
-        filesChanged: [],
-        decisions: [],
-        blockers: [],
-        summary: "fake-runtime echo",
-      }) + "\n";
+    const envelope = `${JSON.stringify({
+      status: "ok",
+      filesChanged: [],
+      decisions: [],
+      blockers: [],
+      summary: "fake-runtime echo",
+    })}\n`;
 
     // Drive the stdout PassThrough only after stdin closes.
     const stdout = new PassThrough();
