@@ -62,6 +62,7 @@ const main = async (): Promise<void> => {
     runtime,
     handles: () => activeHandles.values(),
     shutdownResolver,
+    signalSource: process,
   });
 
   // T-0-04: do NOT interpolate the token here. Token presence is logged
