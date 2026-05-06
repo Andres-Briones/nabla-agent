@@ -18,13 +18,25 @@ import type { IContainerRuntime } from "./interface";
 
 // ADR-0001 #5: spec validation rejects docker.sock / podman.sock mounts
 // before any docker call. Defence in depth alongside the audit.
-const DOCKER_SOCK_RX = /(?:^|[\\/])(docker\.sock|podman\.sock)$/;
+//
+// Phase 1 plan 10 (closes 01-REVIEWS.md MEDIUM): match docker.sock
+// OR podman.sock at any segment boundary. Reject:
+//   /var/run/docker.sock           (canonical)
+//   /var/run/docker.sock.bak       (suffix-after-dot)
+//   /host/var/run/docker.sock/foo  (mid-path)
+//   /run/podman/podman.sock        (podman variant)
+const DOCKER_SOCK_RX = /(?:^|[\\/])(?:docker\.sock|podman\.sock)(?:$|[\\/]|\.)/;
 
 const validateSpec = (spec: ContainerSpec): void => {
   for (const m of spec.mounts) {
     if (DOCKER_SOCK_RX.test(m.source)) {
       throw new Error(
-        `spec mount rejected: docker/podman socket source forbidden (got '${m.source}')`,
+        `spec mount rejected: docker/podman socket forbidden in source (got '${m.source}')`,
+      );
+    }
+    if (DOCKER_SOCK_RX.test(m.target)) {
+      throw new Error(
+        `spec mount rejected: docker/podman socket forbidden in target (got '${m.target}')`,
       );
     }
   }
@@ -100,6 +112,56 @@ export class DockerRuntime implements IContainerRuntime {
     const stderrPass = new PassThrough();
     this.docker.modem.demuxStream(stream, stdoutPass, stderrPass);
 
+    // 01-REVIEWS.md MEDIUM: capture the first stream error so wait()
+    // can distinguish "stream broke mid-exec" from "container exited
+    // with code -1." We rethrow a tagged error from wait() in the
+    // former case.
+    let streamError: Error | null = null;
+    stream.once("error", (err: Error) => {
+      if (!streamError) streamError = err;
+    });
+
+    // 01-REVIEWS.md MEDIUM: wrap stdin in a writable-only proxy. The
+    // hijacked stream is bidirectional; consumers that accidentally
+    // pipe FROM stdin would steal bytes destined for the demux. The
+    // proxy surfaces only the WritableStream methods.
+    const stdinProxy: NodeJS.WritableStream = {
+      write: stream.write.bind(stream),
+      end: stream.end.bind(stream),
+      // Optional Writable methods consumers may call:
+      cork: typeof stream.cork === "function" ? stream.cork.bind(stream) : () => {},
+      uncork: typeof stream.uncork === "function" ? stream.uncork.bind(stream) : () => {},
+      setDefaultEncoding:
+        typeof stream.setDefaultEncoding === "function"
+          ? stream.setDefaultEncoding.bind(stream)
+          : () => stdinProxy,
+      on: stream.on.bind(stream),
+      once: stream.once.bind(stream),
+      off: stream.off.bind(stream),
+      emit: stream.emit.bind(stream),
+      removeListener: stream.removeListener.bind(stream),
+      removeAllListeners: stream.removeAllListeners.bind(stream),
+      addListener: stream.addListener.bind(stream),
+      listenerCount: stream.listenerCount.bind(stream),
+      listeners: stream.listeners.bind(stream),
+      rawListeners: stream.rawListeners.bind(stream),
+      eventNames: stream.eventNames.bind(stream),
+      getMaxListeners: stream.getMaxListeners.bind(stream),
+      setMaxListeners: stream.setMaxListeners.bind(stream),
+      prependListener: stream.prependListener.bind(stream),
+      prependOnceListener: stream.prependOnceListener.bind(stream),
+      // Mark as writable for type narrowing.
+      get writable() {
+        return stream.writable;
+      },
+      get writableEnded() {
+        return stream.writableEnded;
+      },
+      get writableFinished() {
+        return stream.writableFinished;
+      },
+    } as unknown as NodeJS.WritableStream;
+
     const wait = async (): Promise<{ exitCode: number }> => {
       // Pitfall 1: listen on close/end/error AND poll inspect.
       await new Promise<void>((resolve) => {
@@ -114,10 +176,17 @@ export class DockerRuntime implements IContainerRuntime {
         stream.once("end", finish);
         stream.once("error", finish);
       });
+      if (streamError) {
+        // Distinguishable from a real -1 exit: streamError is an Error
+        // instance with a message; downstream code can catch and inspect.
+        throw new Error(`exec stream error: ${streamError.message}`, {
+          cause: streamError,
+        });
+      }
       const inspect = await exec.inspect();
       return { exitCode: inspect.ExitCode ?? -1 };
     };
-    return { stdin: stream, stdout: stdoutPass, stderr: stderrPass, wait };
+    return { stdin: stdinProxy, stdout: stdoutPass, stderr: stderrPass, wait };
   }
 
   async stop(h: ContainerHandle, opts?: { timeout?: number }): Promise<void> {
