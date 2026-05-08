@@ -1,11 +1,11 @@
 {
   "_comment": "SPDX licenses for each package in packages.list. Verified against Debian's /usr/share/doc/<pkg>/copyright at curation time. Versions MUST match packages.list exactly -- the audit script (scripts/audit-image-licenses.ts) cross-checks. Adding a new package requires updating BOTH files in the same PR.",
   "packages": {
-    "bash": { "version": "5.2.15-2+b8", "license": "GPL-3.0+" },
+    "bash": { "version": "5.2.15-2+b10", "license": "GPL-3.0+" },
     "coreutils": { "version": "9.1-1", "license": "GPL-3.0+" },
-    "git": { "version": "1:2.39.5-0+deb12u2", "license": "GPL-2.0" },
+    "git": { "version": "1:2.39.5-0+deb12u3", "license": "GPL-2.0" },
     "curl": { "version": "7.88.1-10+deb12u14", "license": "curl" },
-    "jq": { "version": "1.6-2.1", "license": "MIT" },
-    "ca-certificates": { "version": "20230311", "license": "MPL-2.0" }
+    "jq": { "version": "1.6-2.1+deb12u1", "license": "MIT" },
+    "ca-certificates": { "version": "20230311+deb12u1", "license": "MPL-2.0" }
   }
 }
