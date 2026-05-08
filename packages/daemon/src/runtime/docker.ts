@@ -3,9 +3,13 @@
 // (D-10 NABLA_WORKER_BYPASS=1 injected unconditionally), D-08 (per-task /work
 // tmpfs), D-20 (labels), D-05 (per-worker --internal bridge).
 //
-// Pitfall 1 (dockerode #462): exec.start() end-event unreliable on second
-// exec on same container -- we never reuse containers (one container per
-// worker; one exec per container) AND wait() listens on close/end/error.
+// Pitfall 1 (dockerode #462 + Bun 1.3 hijack-stream quirk): under Bun,
+// stream close/end/error events on hijacked exec streams do not fire
+// reliably for the first (and only) exec on a freshly-started container.
+// wait() therefore POLLS exec.inspect() for Running:false (~100ms) as the
+// primary mechanism and races it against the stream-event listener as a
+// fast-path. We still never reuse containers (one container per worker;
+// one exec per container).
 // Pitfall 2: demuxStream required when Tty=false.
 // Pitfall 5: NetworkMode "bridge" string connects to default bridge with
 // external connectivity; we always pass a created --internal bridge name.
@@ -163,19 +167,60 @@ export class DockerRuntime implements IContainerRuntime {
     } as unknown as NodeJS.WritableStream;
 
     const wait = async (): Promise<{ exitCode: number }> => {
-      // Pitfall 1: listen on close/end/error AND poll inspect.
-      await new Promise<void>((resolve) => {
-        let done = false;
-        const finish = (): void => {
-          if (!done) {
-            done = true;
-            resolve();
-          }
-        };
-        stream.once("close", finish);
-        stream.once("end", finish);
-        stream.once("error", finish);
+      // See Pitfall note at top of file: polling exec.inspect() for
+      // Running:false is the GUARANTEE; stream events are kept as a
+      // fast-path that may resolve sooner with no penalty.
+      let pollHandle: ReturnType<typeof setInterval> | null = null;
+      let done = false;
+      const finish = (resolve: () => void): void => {
+        if (!done) {
+          done = true;
+          resolve();
+        }
+      };
+
+      // Hoisted so the `finally` block can remove them when the poll wins.
+      let onClose: (() => void) | undefined;
+      let onEnd: (() => void) | undefined;
+      let onError: (() => void) | undefined;
+
+      const eventPromise = new Promise<void>((resolve) => {
+        onClose = () => finish(resolve);
+        onEnd = () => finish(resolve);
+        onError = () => finish(resolve);
+        stream.once("close", onClose);
+        stream.once("end", onEnd);
+        stream.once("error", onError);
       });
+
+      const pollPromise = new Promise<void>((resolve) => {
+        pollHandle = setInterval(() => {
+          // Best-effort; swallow inspect errors and let the next tick retry.
+          // A persistent failure is fine -- the eventPromise will still fire,
+          // or the test's outer timeout catches a truly stuck exec.
+          exec.inspect().then(
+            (info) => {
+              if (info.Running === false) finish(resolve);
+            },
+            () => {
+              /* transient inspect error -- try again next tick */
+            },
+          );
+        }, 100);
+      });
+
+      try {
+        await Promise.race([eventPromise, pollPromise]);
+      } finally {
+        if (pollHandle) clearInterval(pollHandle);
+        // Best-effort listener cleanup; if eventPromise won, the once()
+        // handlers already removed themselves but off() on an absent
+        // listener is a no-op.
+        if (onClose) stream.off("close", onClose);
+        if (onEnd) stream.off("end", onEnd);
+        if (onError) stream.off("error", onError);
+      }
+
       if (streamError) {
         // Distinguishable from a real -1 exit: streamError is an Error
         // instance with a message; downstream code can catch and inspect.
