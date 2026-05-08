@@ -14,3 +14,11 @@ scripts/*.d.ts
 scripts/*.d.ts.map
 scripts/*.js
 scripts/*.js.map
+
+# Session-local diagnostic artifacts (never committed)
+/diag-*.sh
+/repro-*.sh
+/repro-*.ts
+/discover-*.sh
+/test-phase1-dynamic.sh
+/apt-versions.log
