@@ -25,10 +25,24 @@ ARG DEBIAN_DIGEST
 FROM oven/bun:1.3.13-debian@${BUN_DIGEST} AS build
 WORKDIR /src
 
+# Manifests for ALL workspaces — required so bun install --frozen-lockfile
+# can resolve the locked workspace graph (D-25 reproducibility). Spelled
+# out per-package (not packages/*/package.json) so a renamed workspace
+# trips the build instead of silently passing.
 COPY package.json bun.lock ./
+COPY packages/cli/package.json          ./packages/cli/
+COPY packages/daemon/package.json       ./packages/daemon/
+COPY packages/shared/package.json       ./packages/shared/
+COPY packages/team-manager/package.json ./packages/team-manager/
+COPY packages/worker/package.json       ./packages/worker/
+RUN bun install --frozen-lockfile
+
+# Source for the worker build only — kept after install so source changes
+# don't bust the deps cache layer. cli/daemon/team-manager source is not
+# needed for `bun build packages/worker/src/stub-main.ts`; their package.json
+# entries above are sufficient for workspace graph resolution.
 COPY packages/shared ./packages/shared
 COPY packages/worker ./packages/worker
-RUN bun install --frozen-lockfile
 
 RUN bun build packages/worker/src/stub-main.ts \
       --compile \
