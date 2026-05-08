@@ -17,7 +17,11 @@
 # scripts/build-test-image.sh (or any caller) via `--build-arg BUN_DIGEST=sha256:...`.
 # No default value: missing the arg is a deliberate hard error so we
 # never accidentally build against `latest`.
+# Both digests are declared in GLOBAL scope (before any FROM) so each
+# is visible to its respective FROM line. ARGs declared after a FROM
+# are stage-local and CANNOT be used in any subsequent FROM digest.
 ARG BUN_DIGEST
+ARG DEBIAN_DIGEST
 FROM oven/bun:1.3.13-debian@${BUN_DIGEST} AS build
 WORKDIR /src
 
@@ -34,9 +38,9 @@ RUN bun build packages/worker/src/stub-main.ts \
 ############################################################
 # Stage 2: runtime image (minimal profile)
 ############################################################
-# ARG must precede the FROM that consumes it; the prior Stage-1 ARG
-# is scoped to that stage only, so we re-declare here for Stage 2.
-ARG DEBIAN_DIGEST
+# DEBIAN_DIGEST is declared globally above (alongside BUN_DIGEST) so it
+# is in scope here. No Stage-2 ARG re-declaration is needed: nothing in
+# Stage 2's RUN/COPY commands reads ${DEBIAN_DIGEST}.
 FROM debian:bookworm-slim@${DEBIAN_DIGEST}
 
 # ADR-0001 #1: non-root UID:GID 1000:1000.
