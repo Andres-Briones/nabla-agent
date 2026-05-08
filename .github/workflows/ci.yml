@@ -43,12 +43,18 @@ jobs:
       - name: License gate (production deps)
         run: |
           ALLOWED=$(jq -r '.licenses | join(";")' .licenses/allowed.json)
-          bunx license-checker-rseidelsohn --production --onlyAllow "$ALLOWED" --excludePrivatePackages
+          EXCLUDED=$(jq -r '(.exceptions // []) | map(.pkg) | join(";")' .licenses/allowed.json)
+          bunx license-checker-rseidelsohn --production --onlyAllow "$ALLOWED" --excludePackages "$EXCLUDED" --excludePrivatePackages
 
       - name: License gate (including dev deps)
+        # `--excludePackages` skips entries from .licenses/allowed.json#exceptions
+        # so this fast first-pass doesn't trip on packages already reviewed by
+        # the belt-and-braces audit below (`scripts/license-audit.ts`), which
+        # validates each exception's pinned name@version + license string.
         run: |
           ALLOWED=$(jq -r '.licenses | join(";")' .licenses/allowed.json)
-          bunx license-checker-rseidelsohn --onlyAllow "$ALLOWED" --excludePrivatePackages
+          EXCLUDED=$(jq -r '(.exceptions // []) | map(.pkg) | join(";")' .licenses/allowed.json)
+          bunx license-checker-rseidelsohn --onlyAllow "$ALLOWED" --excludePackages "$EXCLUDED" --excludePrivatePackages
 
       - name: License audit (belt-and-braces -- catches missing/non-SPDX)
         run: bun run scripts/license-audit.ts
