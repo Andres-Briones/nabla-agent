@@ -10,6 +10,13 @@
 // primary mechanism and races it against the stream-event listener as a
 // fast-path. We still never reuse containers (one container per worker;
 // one exec per container).
+// Pitfall 1b (Bun 1.3 + dockerode hijack-with-stdin): exec.start({ hijack: true,
+// stdin: true }) never resolves under Bun for read-only commands; the HTTP
+// upgrade dance for the bidirectional duplex hangs. Default opts.attachStdin
+// is `false`, which uses { hijack: false, stdin: false } and a no-op stdin
+// stub. Callers that genuinely need to write to stdin (worker JSON-RPC task
+// descriptor, Phase 3) must opt in with { attachStdin: true }; that path is
+// unblocked when the upstream Bun/dockerode interaction is fixed.
 // Pitfall 2: demuxStream required when Tty=false.
 // Pitfall 5: NetworkMode "bridge" string connects to default bridge with
 // external connectivity; we always pass a created --internal bridge name.
@@ -101,16 +108,18 @@ export class DockerRuntime implements IContainerRuntime {
   async exec(
     h: ContainerHandle,
     cmd: string[],
-    opts?: { env?: Record<string, string> },
+    opts?: { env?: Record<string, string>; attachStdin?: boolean },
   ): Promise<ExecHandle> {
+    // Pitfall 1b: default attachStdin=false to avoid Bun's hijack-with-stdin hang.
+    const attachStdin = opts?.attachStdin === true;
     const exec = await this.docker.getContainer(h.id).exec({
       Cmd: cmd,
-      AttachStdin: true,
+      AttachStdin: attachStdin,
       AttachStdout: true,
       AttachStderr: true,
       Env: Object.entries(opts?.env ?? {}).map(([k, v]) => `${k}=${v}`),
     });
-    const stream = await exec.start({ hijack: true, stdin: true });
+    const stream = await exec.start({ hijack: attachStdin, stdin: attachStdin });
 
     // Pitfall 2: dockerode multiplexes stdout+stderr when Tty=false.
     const stdoutPass = new PassThrough();
@@ -130,42 +139,72 @@ export class DockerRuntime implements IContainerRuntime {
     // hijacked stream is bidirectional; consumers that accidentally
     // pipe FROM stdin would steal bytes destined for the demux. The
     // proxy surfaces only the WritableStream methods.
-    const stdinProxy: NodeJS.WritableStream = {
-      write: stream.write.bind(stream),
-      end: stream.end.bind(stream),
-      // Optional Writable methods consumers may call:
-      cork: typeof stream.cork === "function" ? stream.cork.bind(stream) : () => {},
-      uncork: typeof stream.uncork === "function" ? stream.uncork.bind(stream) : () => {},
-      setDefaultEncoding:
-        typeof stream.setDefaultEncoding === "function"
-          ? stream.setDefaultEncoding.bind(stream)
-          : () => stdinProxy,
-      on: stream.on.bind(stream),
-      once: stream.once.bind(stream),
-      off: stream.off.bind(stream),
-      emit: stream.emit.bind(stream),
-      removeListener: stream.removeListener.bind(stream),
-      removeAllListeners: stream.removeAllListeners.bind(stream),
-      addListener: stream.addListener.bind(stream),
-      listenerCount: stream.listenerCount.bind(stream),
-      listeners: stream.listeners.bind(stream),
-      rawListeners: stream.rawListeners.bind(stream),
-      eventNames: stream.eventNames.bind(stream),
-      getMaxListeners: stream.getMaxListeners.bind(stream),
-      setMaxListeners: stream.setMaxListeners.bind(stream),
-      prependListener: stream.prependListener.bind(stream),
-      prependOnceListener: stream.prependOnceListener.bind(stream),
-      // Mark as writable for type narrowing.
-      get writable() {
-        return stream.writable;
-      },
-      get writableEnded() {
-        return stream.writableEnded;
-      },
-      get writableFinished() {
-        return stream.writableFinished;
-      },
-    } as unknown as NodeJS.WritableStream;
+    //
+    // Pitfall 1b: when attachStdin is false the stream is read-only;
+    // stdinProxy becomes a no-op stub so callers that habitually call
+    // .end() (egress-block test, etc.) don't crash.
+    const stdinProxy: NodeJS.WritableStream = !attachStdin
+      ? ({
+          write: () => true,
+          end: () => stdinProxy,
+          on: () => stdinProxy,
+          once: () => stdinProxy,
+          off: () => stdinProxy,
+          emit: () => false,
+          removeListener: () => stdinProxy,
+          removeAllListeners: () => stdinProxy,
+          addListener: () => stdinProxy,
+          listenerCount: () => 0,
+          listeners: () => [],
+          rawListeners: () => [],
+          eventNames: () => [],
+          getMaxListeners: () => 0,
+          setMaxListeners: () => stdinProxy,
+          prependListener: () => stdinProxy,
+          prependOnceListener: () => stdinProxy,
+          cork: () => {},
+          uncork: () => {},
+          setDefaultEncoding: () => stdinProxy,
+          writable: false,
+          writableEnded: true,
+          writableFinished: true,
+        } as unknown as NodeJS.WritableStream)
+      : ({
+          write: stream.write.bind(stream),
+          end: stream.end.bind(stream),
+          // Optional Writable methods consumers may call:
+          cork: typeof stream.cork === "function" ? stream.cork.bind(stream) : () => {},
+          uncork: typeof stream.uncork === "function" ? stream.uncork.bind(stream) : () => {},
+          setDefaultEncoding:
+            typeof stream.setDefaultEncoding === "function"
+              ? stream.setDefaultEncoding.bind(stream)
+              : () => stdinProxy,
+          on: stream.on.bind(stream),
+          once: stream.once.bind(stream),
+          off: stream.off.bind(stream),
+          emit: stream.emit.bind(stream),
+          removeListener: stream.removeListener.bind(stream),
+          removeAllListeners: stream.removeAllListeners.bind(stream),
+          addListener: stream.addListener.bind(stream),
+          listenerCount: stream.listenerCount.bind(stream),
+          listeners: stream.listeners.bind(stream),
+          rawListeners: stream.rawListeners.bind(stream),
+          eventNames: stream.eventNames.bind(stream),
+          getMaxListeners: stream.getMaxListeners.bind(stream),
+          setMaxListeners: stream.setMaxListeners.bind(stream),
+          prependListener: stream.prependListener.bind(stream),
+          prependOnceListener: stream.prependOnceListener.bind(stream),
+          // Mark as writable for type narrowing.
+          get writable() {
+            return stream.writable;
+          },
+          get writableEnded() {
+            return stream.writableEnded;
+          },
+          get writableFinished() {
+            return stream.writableFinished;
+          },
+        } as unknown as NodeJS.WritableStream);
 
     const wait = async (): Promise<{ exitCode: number }> => {
       // See Pitfall note at top of file: polling exec.inspect() for
