@@ -61,11 +61,16 @@ export class DockerRuntime implements IContainerRuntime {
   async create(spec: ContainerSpec): Promise<ContainerHandle> {
     validateSpec(spec);
 
-    // Per-worker --internal bridge (D-05). Name encodes run_id + worker_id
-    // so destroy() can find it.
+    // Per-worker --internal bridge (D-05). Name keeps run_id + worker_id
+    // for human-readable `docker network ls` debugging, plus an 8-hex
+    // random suffix so re-runs of the same {run_id, worker_id} pair do
+    // not 409-conflict on a leftover network from a crashed prior run.
+    // destroy() looks up by h.name (set below), not by reconstructing
+    // from labels, so the suffix does not break cleanup.
     const runId = labelOrEmpty(spec.labels, "nabla.run_id");
     const workerId = labelOrEmpty(spec.labels, "nabla.worker_id");
-    const netName = `nabla-net-${runId}-${workerId}`;
+    const netSuffix = crypto.randomUUID().slice(0, 8);
+    const netName = `nabla-net-${runId}-${workerId}-${netSuffix}`;
     await this.docker.createNetwork({ Name: netName, Driver: "bridge", Internal: true });
 
     const container = await this.docker.createContainer({
