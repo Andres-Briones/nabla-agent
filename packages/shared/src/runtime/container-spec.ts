@@ -8,6 +8,8 @@ import { MountSchema } from "./mount";
 export const ContainerSpecSchema = z.object({
   image: z.string(),
   cmd: z.array(z.string()).optional(),
+  // entrypoint override; tests use this to keep a container alive past its production ENTRYPOINT
+  entrypoint: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).default({}),
   labels: z.record(z.string(), z.string()).default({}),
   mounts: z.array(MountSchema).default([]),

@@ -64,6 +64,7 @@ export class DockerRuntime implements IContainerRuntime {
     const container = await this.docker.createContainer({
       Image: spec.image,
       Cmd: spec.cmd,
+      Entrypoint: spec.entrypoint,
       User: spec.user,
       Env: Object.entries({ NABLA_WORKER_BYPASS: "1", ...spec.env }).map(([k, v]) => `${k}=${v}`),
       Labels: spec.labels,

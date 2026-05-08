@@ -24,6 +24,10 @@ guard("egress block — empty allow-list actually blocks egress (CONT-03)", () =
     runtime = new DockerRuntime();
     handle = await runtime.create({
       image: "nabla-worker:test-minimal",
+      // Override the worker entrypoint -- the worker reads stdin and exits
+      // 4 in <300ms when no client attaches; we need the container alive
+      // to exec curl into it.
+      entrypoint: ["sleep", "60"],
       env: {},
       labels: {
         "nabla.run_id": "egress-1",
